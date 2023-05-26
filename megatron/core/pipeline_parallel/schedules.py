@@ -246,8 +246,8 @@ def forward_step(
         MoEAuxLossAutoScaler.set_loss_scale(loss_scale / num_microbatches)
 
     fwd_pass_end = datetime.now()
-    rank = torch.distributed.get_rank()
-    print(f'[Rank {rank}] Forward pass time schedules.py: {(fwd_pass_end - fwd_pass_start).total_seconds()}')
+    # rank = torch.distributed.get_rank()
+    # print(f'[Rank {rank}] Forward pass time schedules.py: {(fwd_pass_end - fwd_pass_start).total_seconds()}')
 
     # If T5 model (or other model with encoder and decoder)
     # and in decoder stack, then send encoder_hidden_state
@@ -331,8 +331,8 @@ def backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, c
         config.timers('backward-compute').stop()
 
     bwd_pass_end = datetime.now()
-    rank = torch.distributed.get_rank()
-    print(f'[Rank {rank}] Backward pass time schedules.py: {(bwd_pass_end - bwd_pass_start).total_seconds()}')
+    # rank = torch.distributed.get_rank()
+    # print(f'[Rank {rank}] Backward pass time schedules.py: {(bwd_pass_end - bwd_pass_start).total_seconds()}')
 
     return input_tensor_grad
 

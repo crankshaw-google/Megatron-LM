@@ -5,6 +5,7 @@ from functools import reduce
 from typing import Callable, List, Optional, Tuple, Union
 
 import torch
+import nvtx
 
 from megatron import core
 from megatron.core import ModelParallelConfig
@@ -403,6 +404,7 @@ def send_forward(output_tensor: torch.Tensor, config: ModelParallelConfig) -> No
     if not core.parallel_state.is_pipeline_last_stage():
         if config.timers is not None:
             config.timers('forward-send', log_level=2).start()
+        rng = nvtx.start_range(message="send_forward", color="orange")
         _communicate(
             tensor_send_next=output_tensor,
             tensor_send_prev=None,
@@ -411,6 +413,7 @@ def send_forward(output_tensor: torch.Tensor, config: ModelParallelConfig) -> No
             tensor_shape=None,
             config=config,
         )
+        nvtx.end_range(rng)
         if config.timers is not None:
             config.timers('forward-send').stop()
 

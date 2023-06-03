@@ -1280,7 +1280,7 @@ def forward_backward_pipelining_without_interleaving(
     # Run warmup forward passes.
     warmup_rng = nvtx.start_range(message="fwd_pass_warmup", color="green")
     for i in range(num_warmup_microbatches):
-        warmup_rng = nvtx.start_range(message=f"fwd_pass_warmup: {i}", color="yellow")
+        nvtx.mark(message=f"fwd_pass_warmup: {i}", color="yellow")
         # Decide to checkpoint all layers' activations of the current micro-batch
         if max_outstanding_backprops is not None:
             checkpoint_activations_microbatch = (
@@ -1320,6 +1320,7 @@ def forward_backward_pipelining_without_interleaving(
     if num_microbatches_remaining > 0:
         input_tensor = recv_forward(recv_tensor_shapes, config)
 
+    steady_state_rng = nvtx.start_range(message="fwd_pass_warmup", color="green")
     # Run 1F1B in steady state.
     for i in range(num_microbatches_remaining):
         last_iteration = i == (num_microbatches_remaining - 1)
@@ -1388,6 +1389,7 @@ def forward_backward_pipelining_without_interleaving(
                     input_tensor_grad, recv_tensor_shapes, config
                 )
 
+    nvtx.end_range(steady_state_rng)
     # Run cooldown backward passes.
     if not forward_only:
         for i in range(num_warmup_microbatches):

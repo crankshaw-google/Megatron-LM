@@ -1277,10 +1277,16 @@ def forward_backward_pipelining_without_interleaving(
         output_tensors = []
     forward_data_store = []
 
+
+    rank = torch.distributed.get_rank()
+
     # Run warmup forward passes.
     warmup_rng = nvtx.start_range(message="fwd_pass_warmup", color="green")
     for i in range(num_warmup_microbatches):
-        nvtx.mark(message=f"fwd_pass_warmup: {i}", color="yellow")
+        if i % 2 == 0:
+            nvtx.mark(message=f"fwd_pass_warmup: {i}, rank: {rank}", color="yellow")
+        else:
+            nvtx.mark(message=f"fwd_pass_warmup: {i}, rank: {rank}", color="orange")
         # Decide to checkpoint all layers' activations of the current micro-batch
         if max_outstanding_backprops is not None:
             checkpoint_activations_microbatch = (

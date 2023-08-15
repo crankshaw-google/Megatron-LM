@@ -652,6 +652,7 @@ def forward_backward_pipelining_with_interleaving(*,
         return input_tensor_grad
 
     # Run warmup forward passes.
+    warmup_rng = nvtx.start_range(message="fwd_pass_warmup", color="green")
     parallel_state.set_virtual_pipeline_model_parallel_rank(0)
     input_tensors[0].append(
         p2p_communication.recv_forward(tensor_shape,
@@ -740,6 +741,9 @@ def forward_backward_pipelining_with_interleaving(*,
 
         deallocate_output_tensor(output_tensor, deallocate_pipeline_outputs)
 
+    nvtx.end_range(warmup_rng)
+
+    steady_state_rng = nvtx.start_range(message="fwd_pass_steady_state", color="darkgreen")
     # Run 1F1B in steady state.
     for k in range(num_microbatches_remaining):
         # Forward pass.
@@ -905,6 +909,8 @@ def forward_backward_pipelining_with_interleaving(*,
                 output_tensor_grad)
 
     deallocate_output_tensor(output_tensor, deallocate_pipeline_outputs)
+
+    nvtx.end_range(steady_state_rng)
 
     # Run cooldown backward passes (flush out pipeline).
     if not forward_only:

@@ -587,7 +587,8 @@ def forward_backward_pipelining_with_interleaving(
     # Synchronize params for first two model chunks
     if config.param_sync_func is not None:
         config.param_sync_func[0](model[0].parameters())
-        config.param_sync_func[1](model[1].parameters())
+        if len(model) > 1:
+            config.param_sync_func[1](model[1].parameters())
 
     def get_model_chunk_id(microbatch_id, forward):
         """Helper method to get the model chunk ID given the iteration number."""
@@ -829,6 +830,9 @@ def forward_backward_pipelining_with_interleaving(
             input_tensors[next_forward_model_chunk_id].append(input_tensor)
 
         deallocate_output_tensor(output_tensor, config.deallocate_pipeline_outputs)
+
+    if num_warmup_microbatches == 0:
+        output_tensor = None
 
     # Run 1F1B in steady state.
     for k in range(num_microbatches_remaining):

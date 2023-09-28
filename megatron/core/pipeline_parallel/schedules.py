@@ -733,6 +733,7 @@ def forward_backward_pipelining_with_interleaving(
     fwd_wait_handles = None
     bwd_wait_handles = None
 
+    warmup_rng = nvtx.start_range(message="fwd_pass_warmup", color="green")
     for k in range(num_warmup_microbatches):
 
         if fwd_wait_handles is not None:
@@ -831,10 +832,12 @@ def forward_backward_pipelining_with_interleaving(
 
         deallocate_output_tensor(output_tensor, config.deallocate_pipeline_outputs)
 
+    nvtx.end_range(warmup_rng)
     if num_warmup_microbatches == 0:
         output_tensor = None
 
     # Run 1F1B in steady state.
+    steady_state_rng = nvtx.start_range(message="fwd_pass_steady_state", color="darkgreen")
     for k in range(num_microbatches_remaining):
         # Forward pass.
         forward_k = k + num_warmup_microbatches
@@ -1014,6 +1017,7 @@ def forward_backward_pipelining_with_interleaving(
 
     deallocate_output_tensor(output_tensor, config.deallocate_pipeline_outputs)
 
+    nvtx.end_range(steady_state_rng)
     # Run cooldown backward passes (flush out pipeline).
     if not forward_only:
         if config.overlap_p2p_comm and bwd_wait_handles is not None:

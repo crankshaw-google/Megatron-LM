@@ -122,6 +122,10 @@ _USING_LAYER_UNIT_TEST_STRATEGY = None
 # ratio for fan-in fan-out (assuming stimulus and response components have same number of data parallel groups)
 _FIFO_RATIO = None
 
+# booleans for which component current rank is in
+_IS_RANK_IN_FIRST_COMPONENT = False
+_IS_RANK_IN_LAST_COMPONENT = False
+
 
 def get_nccl_options(pg_name, nccl_comm_cfgs):
     """Set the NCCL process group options.
@@ -829,6 +833,13 @@ def initialize_model_components_parallel(
 
     first_component_name, middle_component_name, last_component_name = tuple(parallelization_specs.keys())
 
+    global _IS_RANK_IN_FIRST_COMPONENT
+    global _IS_RANK_IN_LAST_COMPONENT
+    if rank in all_gpu_ranks[first_component_name]:
+        _IS_RANK_IN_FIRST_COMPONENT = True
+    if rank in all_gpu_ranks[last_component_name]:
+        _IS_RANK_IN_LAST_COMPONENT = True
+
     # Build the model-parallel groups.
     global _MODEL_PARALLEL_GROUP
     assert len(_MODEL_PARALLEL_GROUP) == 0, 'model parallel group is already initialized'
@@ -1394,6 +1405,14 @@ def is_pipeline_first_stage(ignore_virtual=False):
     return get_pipeline_model_parallel_rank() == 0
 
 
+def is_rank_in_first_component():
+    return _IS_RANK_IN_FIRST_COMPONENT
+
+
+def is_rank_in_last_component():
+    return _IS_RANK_IN_LAST_COMPONENT
+
+
 def is_pipeline_component_first_stage():
     """Return True if in the first pipeline component-parallel stage, False otherwise."""
     # TODO: implement virtual conditional
@@ -1770,6 +1789,10 @@ def destroy_global_memory_buffer():
 
 def destroy_model_parallel():
     """Set the groups to none."""
+    global _IS_RANK_IN_FIRST_COMPONENT
+    _IS_RANK_IN_FIRST_COMPONENT = False
+    global _IS_RANK_IN_LAST_COMPONENT
+    _IS_RANK_IN_LAST_COMPONENT = False
     global _MODEL_PARALLEL_GROUP
     _MODEL_PARALLEL_GROUP = []
     global _TENSOR_MODEL_PARALLEL_GROUP

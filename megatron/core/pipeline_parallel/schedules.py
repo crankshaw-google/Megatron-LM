@@ -749,6 +749,9 @@ def forward_backward_pipelining_with_interleaving(
     # Run warmup forward passes.
     parallel_state.set_virtual_pipeline_model_parallel_rank(0)
 
+    # precaution to make sure _COMPONENT_CONNECTOR_GROUP_INDEX value is not off set
+    assert _COMPONENT_CONNECTOR_GROUP_INDEX == 0
+
     # iterate through each num_pipeline_model_parallel_groups_to_track
     for _ in range(num_pipeline_model_parallel_groups_to_track):
         input_tensors[_COMPONENT_CONNECTOR_GROUP_INDEX][0].append(
@@ -900,6 +903,8 @@ def forward_backward_pipelining_with_interleaving(
         cur_model_chunk_id = get_model_chunk_id(forward_k, forward=True)
         current_microbatch = get_microbatch_id_in_model_chunk(forward_k, forward=True)
         if config.overlap_p2p_comm:
+            # precaution to make sure _COMPONENT_CONNECTOR_GROUP_INDEX value is not off set
+            assert _COMPONENT_CONNECTOR_GROUP_INDEX == 0
             # iterate through each num_pipeline_model_parallel_groups_to_track
             for _ in range(num_pipeline_model_parallel_groups_to_track):
                 if fwd_wait_handles is not None:
@@ -954,6 +959,9 @@ def forward_backward_pipelining_with_interleaving(
 
                     if num_pipeline_model_parallel_groups_to_track != 1:
                         _COMPONENT_CONNECTOR_GROUP_INDEX = (_COMPONENT_CONNECTOR_GROUP_INDEX + 1) % num_pipeline_model_parallel_groups_to_track
+
+                # precaution to make sure _COMPONENT_CONNECTOR_GROUP_INDEX value is not off set
+                assert _COMPONENT_CONNECTOR_GROUP_INDEX == 0
 
                 # iterate through each num_pipeline_model_parallel_groups_to_track
                 for _ in range(num_pipeline_model_parallel_groups_to_track):
@@ -1092,6 +1100,9 @@ def forward_backward_pipelining_with_interleaving(
                 wait_handle.wait()
 
         if all_warmup_microbatches:
+            # precaution to make sure _COMPONENT_CONNECTOR_GROUP_INDEX value is not off set
+            assert _COMPONENT_CONNECTOR_GROUP_INDEX == 0
+
             # iterate through each num_pipeline_model_parallel_groups_to_track
             for _ in range(num_pipeline_model_parallel_groups_to_track):
                 output_tensor_grads[_COMPONENT_CONNECTOR_GROUP_INDEX][num_model_chunks - 1].append(
@@ -1105,6 +1116,9 @@ def forward_backward_pipelining_with_interleaving(
                     _COMPONENT_CONNECTOR_GROUP_INDEX = (_COMPONENT_CONNECTOR_GROUP_INDEX + 1) % num_pipeline_model_parallel_groups_to_track
 
         for k in range(num_microbatches_remaining, total_num_microbatches):
+            # precaution to make sure _COMPONENT_CONNECTOR_GROUP_INDEX value is not off set
+            assert _COMPONENT_CONNECTOR_GROUP_INDEX == 0
+
             # iterate through each num_pipeline_model_parallel_groups_to_track
             for _ in range(num_pipeline_model_parallel_groups_to_track):
                 input_tensor_grad = backward_step_helper(k)
@@ -1295,6 +1309,9 @@ def forward_backward_pipelining_without_interleaving(
 
     if config.timers is not None:
         config.timers('forward-backward', log_level=1).start(barrier=config.barrier_with_L1_time)
+
+    if parallel_state.get_fifo_ratio() != 1:
+        raise ValueError("batch_p2p_comm is not implemented for non-uniform data parallelism. Please switch to overlap_p2p_comm")
 
     # Disable async grad reductions
     no_sync_func = config.no_sync_func

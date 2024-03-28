@@ -1197,7 +1197,7 @@ def forward_backward_pipelining_without_interleaving(*,
     if not batch_p2p_comm:
         raise ValueError("Non-interleaved pipeline parallelism only supports using batched p2p communication")
 
-    if parallel_state.get_fifo_ratio() != 1:
+    if parallel_state.get_using_layer_unit_test_strategy() and parallel_state.get_fifo_ratio() != 1:
         raise ValueError("batch_p2p_comm is not implemented for non-uniform data parallelism. Please switch to overlap_p2p_comm")
 
     # Disable async grad reductions

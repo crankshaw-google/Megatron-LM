@@ -533,7 +533,7 @@ def forward_backward_pipelining_with_interleaving(
         num_pipeline_model_parallel_groups_to_track = 1
     else:
         num_pipeline_model_parallel_groups_to_track = parallel_state.get_fifo_ratio()
-        
+
     if num_pipeline_model_parallel_groups_to_track != 1 and batch_p2p_comm:
         raise ValueError("batch_p2p_comm is not implemented for non-uniform data parallelism. Please switch to overlap_p2p_comm")
 
@@ -1311,7 +1311,7 @@ def forward_backward_pipelining_without_interleaving(
     if config.timers is not None:
         config.timers('forward-backward', log_level=1).start(barrier=config.barrier_with_L1_time)
 
-    if parallel_state.get_fifo_ratio() != 1:
+    if parallel_state.get_using_layer_unit_test_strategy() and parallel_state.get_fifo_ratio() != 1:
         raise ValueError("batch_p2p_comm is not implemented for non-uniform data parallelism. Please switch to overlap_p2p_comm")
 
     # Disable async grad reductions

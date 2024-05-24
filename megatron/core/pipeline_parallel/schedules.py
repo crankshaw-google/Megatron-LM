@@ -12,6 +12,8 @@ from megatron.core.pipeline_parallel import p2p_communication
 from megatron.core.transformer.moe.router import MoEAuxLossAutoScaler
 from megatron.core.utils import get_attr_wrapped_model, get_model_config, get_model_type
 
+import nvtx
+
 # Types
 Shape = Union[List[int], torch.Size]
 
@@ -184,6 +186,8 @@ def forward_step(
     if config.timers is not None:
         config.timers('forward-compute', log_level=2).start()
 
+    rng = nvtx.start_range(message="fwd_step", color="blue")
+
     if is_first_microbatch and hasattr(model, 'set_is_first_microbatch'):
         model.set_is_first_microbatch()
     if current_microbatch is not None:
@@ -231,6 +235,8 @@ def forward_step(
     if config.timers is not None:
         config.timers('forward-compute').stop()
 
+    nvtx.end_range(rng)
+
     # Set the loss scale for the auxiliary loss of the MoE layer.
     # Since we use a trick to do backward on the auxiliary loss, we need to set the scale explicitly.
     if hasattr(config, 'num_moe_experts') and config.num_moe_experts is not None:
@@ -273,6 +279,8 @@ def backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, c
 
     if config.timers is not None:
         config.timers('backward-compute', log_level=2).start()
+
+    rng = nvtx.start_range(message="bwd_step", color="red")
 
     # Retain the grad on the input_tensor.
     unwrap_input_tensor_grad = False
@@ -321,6 +329,8 @@ def backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, c
 
     if config.timers is not None:
         config.timers('backward-compute').stop()
+
+    nvtx.end_range(rng)
 
     return input_tensor_grad
 
@@ -711,6 +721,7 @@ def forward_backward_pipelining_with_interleaving(
     fwd_wait_handles = None
     bwd_wait_handles = None
 
+    warmup_rng = nvtx.start_range(message="fwd_pass_warmup", color="green")
     for k in range(num_warmup_microbatches):
 
         if fwd_wait_handles is not None:
@@ -809,7 +820,10 @@ def forward_backward_pipelining_with_interleaving(
 
         deallocate_output_tensor(output_tensor, config.deallocate_pipeline_outputs)
 
+    nvtx.end_range(warmup_rng)
+
     # Run 1F1B in steady state.
+    steady_state_rng = nvtx.start_range(message="fwd_pass_steady_state", color="darkgreen")
     for k in range(num_microbatches_remaining):
         # Forward pass.
         forward_k = k + num_warmup_microbatches
@@ -988,6 +1002,8 @@ def forward_backward_pipelining_with_interleaving(
             output_tensor_grads[next_backward_model_chunk_id].append(output_tensor_grad)
 
     deallocate_output_tensor(output_tensor, config.deallocate_pipeline_outputs)
+
+    nvtx.end_range(steady_state_rng)
 
     # Run cooldown backward passes (flush out pipeline).
     if not forward_only:
@@ -1257,7 +1273,12 @@ def forward_backward_pipelining_without_interleaving(
     forward_data_store = []
 
     # Run warmup forward passes.
+    warmup_rng = nvtx.start_range(message="fwd_pass_warmup", color="green")
     for i in range(num_warmup_microbatches):
+        if i % 2 == 0:
+            nvtx.mark(message=f"fwd_pass_warmup: {i}, rank: {rank}", color="yellow")
+        else:
+            nvtx.mark(message=f"fwd_pass_warmup: {i}, rank: {rank}", color="orange")
         # Decide to checkpoint all layers' activations of the current micro-batch
         if max_outstanding_backprops is not None:
             checkpoint_activations_microbatch = (
@@ -1289,6 +1310,8 @@ def forward_backward_pipelining_without_interleaving(
             output_tensors.append(output_tensor)
             deallocate_output_tensor(output_tensor[0], config.deallocate_pipeline_outputs)
 
+    nvtx.end_range(warmup_rng)
+
     # Before running 1F1B, need to receive first forward tensor.
     # If all microbatches are run in warmup / cooldown phase, then no need to
     # receive this tensor here.
@@ -1296,6 +1319,7 @@ def forward_backward_pipelining_without_interleaving(
         input_tensor = recv_forward(recv_tensor_shapes, config)
 
     # Run 1F1B in steady state.
+    steady_state_rng = nvtx.start_range(message="fwd_pass_steady_state", color="darkgreen")
     for i in range(num_microbatches_remaining):
         last_iteration = i == (num_microbatches_remaining - 1)
 
@@ -1363,6 +1387,7 @@ def forward_backward_pipelining_without_interleaving(
                     input_tensor_grad, recv_tensor_shapes, config
                 )
 
+    nvtx.end_range(steady_state_rng)
     # Run cooldown backward passes.
     if not forward_only:
         for i in range(num_warmup_microbatches):

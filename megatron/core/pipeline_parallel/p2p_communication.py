@@ -5,6 +5,7 @@ from functools import reduce
 from typing import Callable, List, Optional, Tuple, Union
 
 import torch
+import nvtx
 
 from megatron import core
 from megatron.core import ModelParallelConfig
@@ -347,6 +348,7 @@ def _communicate(
     return tensor_recv_prev, tensor_recv_next, reqs
 
 
+@nvtx.annotate(color="blue", category="p2p_op")
 def recv_forward(tensor_shape: Shape, config: ModelParallelConfig) -> torch.Tensor:
     """ Receive tensor from previous rank in pipeline (forward receive).
 
@@ -371,6 +373,7 @@ def recv_forward(tensor_shape: Shape, config: ModelParallelConfig) -> torch.Tens
     return input_tensor
 
 
+@nvtx.annotate(color="blue", category="p2p_op")
 def recv_backward(tensor_shape: Shape, config: ModelParallelConfig) -> torch.Tensor:
     """Receive tensor from next rank in pipeline (backward receive).
 
@@ -394,6 +397,7 @@ def recv_backward(tensor_shape: Shape, config: ModelParallelConfig) -> torch.Ten
     return output_tensor_grad
 
 
+@nvtx.annotate(color="blue", category="p2p_op")
 def send_forward(output_tensor: torch.Tensor, config: ModelParallelConfig) -> None:
     """Send tensor to next rank in pipeline (forward send).
 
@@ -403,6 +407,7 @@ def send_forward(output_tensor: torch.Tensor, config: ModelParallelConfig) -> No
     if not core.parallel_state.is_pipeline_last_stage():
         if config.timers is not None:
             config.timers('forward-send', log_level=2).start()
+        rng = nvtx.start_range(message="send_forward", color="orange")
         _communicate(
             tensor_send_next=output_tensor,
             tensor_send_prev=None,
@@ -411,10 +416,12 @@ def send_forward(output_tensor: torch.Tensor, config: ModelParallelConfig) -> No
             tensor_shape=None,
             config=config,
         )
+        nvtx.end_range(rng)
         if config.timers is not None:
             config.timers('forward-send').stop()
 
 
+@nvtx.annotate(color="blue", category="p2p_op")
 def send_backward(input_tensor_grad: torch.Tensor, config: ModelParallelConfig) -> None:
     """Send tensor to previous rank in pipeline (backward send).
 
@@ -435,6 +442,7 @@ def send_backward(input_tensor_grad: torch.Tensor, config: ModelParallelConfig) 
             config.timers('backward-send').stop()
 
 
+@nvtx.annotate(color="blue", category="p2p_op")
 def send_forward_recv_backward(
     output_tensor: torch.Tensor, tensor_shape: Shape, config: ModelParallelConfig
 ) -> torch.Tensor:
@@ -460,6 +468,7 @@ def send_forward_recv_backward(
     return output_tensor_grad
 
 
+@nvtx.annotate(color="blue", category="p2p_op")
 def send_backward_recv_forward(
     input_tensor_grad: torch.Tensor, tensor_shape: Shape, config: ModelParallelConfig
 ) -> torch.Tensor:
@@ -485,6 +494,7 @@ def send_backward_recv_forward(
     return input_tensor
 
 
+@nvtx.annotate(color="blue", category="p2p_op")
 def send_forward_recv_forward(
     output_tensor: torch.Tensor,
     recv_prev: bool,
@@ -514,6 +524,7 @@ def send_forward_recv_forward(
     return input_tensor
 
 
+@nvtx.annotate(color="blue", category="p2p_op")
 def send_backward_recv_backward(
     input_tensor_grad: torch.Tensor,
     recv_next: bool,
@@ -543,6 +554,7 @@ def send_backward_recv_backward(
     return output_tensor_grad
 
 
+@nvtx.annotate(color="blue", category="p2p_op")
 def send_forward_backward_recv_forward_backward(
     output_tensor: torch.Tensor,
     input_tensor_grad: torch.Tensor,
